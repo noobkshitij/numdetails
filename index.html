@@ -1,0 +1,82 @@
+import requests
+import telebot
+from telebot import types
+
+BOT_TOKEN = "YOUR_TELEGRAM_BOT_TOKEN"  # Replace with BotFather token
+API_URL = "https://your-api-url.com/details"  # Replace with your API
+
+bot = telebot.TeleBot(BOT_TOKEN)
+
+# ======= HOME MENU =======
+def send_home(chat_id):
+    markup = types.InlineKeyboardMarkup(row_width=2)
+    markup.add(
+        types.InlineKeyboardButton("🔎 Search by Name", callback_data="search_name"),
+        types.InlineKeyboardButton("🆔 Search by Document", callback_data="search_doc"),
+        types.InlineKeyboardButton("🌍 Search by Region", callback_data="search_region")
+    )
+    markup.add(types.InlineKeyboardButton("ℹ️ About Bot", callback_data="about"))
+    bot.send_message(
+        chat_id,
+        "✨ **Welcome to Details Bot** ✨\n\n"
+        "Choose a search mode below and get instant results in a clean format.",
+        parse_mode="Markdown",
+        reply_markup=markup
+    )
+
+# /start command
+@bot.message_handler(commands=['start'])
+def start(message):
+    send_home(message.chat.id)
+
+# ======= CALLBACK HANDLER =======
+@bot.callback_query_handler(func=lambda call: True)
+def callback_handler(call):
+    if call.data == "search_name":
+        msg = bot.send_message(call.message.chat.id, "✍️ Enter the *full name* to search:", parse_mode="Markdown")
+        bot.register_next_step_handler(msg, lambda m: fetch_details(m, "name"))
+    elif call.data == "search_doc":
+        msg = bot.send_message(call.message.chat.id, "🔢 Enter the *document number* to search:", parse_mode="Markdown")
+        bot.register_next_step_handler(msg, lambda m: fetch_details(m, "document_number"))
+    elif call.data == "search_region":
+        msg = bot.send_message(call.message.chat.id, "🌍 Enter the *region* to search:", parse_mode="Markdown")
+        bot.register_next_step_handler(msg, lambda m: fetch_details(m, "region"))
+    elif call.data == "about":
+        bot.send_message(
+            call.message.chat.id,
+            "🤖 *About This Bot*\n\n"
+            "This bot lets you quickly find people's details by name, document number, or region.\n\n"
+            "⚡ Fast • 🎨 Beautiful • 🔒 Secure",
+            parse_mode="Markdown"
+        )
+    elif call.data == "home":
+        send_home(call.message.chat.id)
+
+# ======= FETCH DETAILS FUNCTION =======
+def fetch_details(message, search_type):
+    user_input = message.text.strip()
+    try:
+        response = requests.get(API_URL, params={search_type: user_input})
+        if response.status_code == 200:
+            data = response.json()
+            reply = (
+                "📄 *Details Found*\n\n"
+                f"👤 **Full Name:** `{data.get('full_name', 'N/A')}`\n"
+                f"👨 **Father's Name:** `{data.get('father_name', 'N/A')}`\n"
+                f"🏠 **Address:** `{data.get('address', 'N/A')}`\n"
+                f"📄 **Document No:** `{data.get('document_number', 'N/A')}`\n"
+                f"🌍 **Region:** `{data.get('region', 'N/A')}`\n"
+            )
+        else:
+            reply = "⚠️ *No results found.* Try again with different input."
+    except Exception as e:
+        reply = f"❌ *Error:* {e}"
+
+    # Add buttons for navigation
+    markup = types.InlineKeyboardMarkup()
+    markup.add(types.InlineKeyboardButton("🔄 Search Again", callback_data="search_name"))
+    markup.add(types.InlineKeyboardButton("🏠 Home", callback_data="home"))
+
+    bot.send_message(message.chat.id, reply, parse_mode="Markdown", reply_markup=markup)
+
+bot.polling()
